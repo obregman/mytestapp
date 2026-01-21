@@ -9,8 +9,21 @@ import com.neoncity.rpg.game.GameState
 
 /**
  * Renders all UI elements including HUD, menus, and dialogue boxes.
+ * Supports both low-res (pixel art) and high-res (crisp text) rendering modes.
  */
-class UIRenderer(private val screenWidth: Int, private val screenHeight: Int) {
+class UIRenderer(private val gameWidth: Int, private val gameHeight: Int) {
+
+    // Scale factors for high-res rendering (set via setScreenSize)
+    private var scaleX = 1f
+    private var scaleY = 1f
+    private var screenWidth = gameWidth
+    private var screenHeight = gameHeight
+    private var isHighRes = false
+
+    // Base text sizes (at game resolution 320x180)
+    private val baseTextSize = 8f
+    private val baseTitleSize = 16f
+    private val baseSmallTextSize = 6f
 
     private val backgroundPaint = Paint().apply {
         color = Color.argb(200, 10, 10, 20)
@@ -25,14 +38,14 @@ class UIRenderer(private val screenWidth: Int, private val screenHeight: Int) {
 
     private val textPaint = Paint().apply {
         color = Color.WHITE
-        textSize = 8f
-        isAntiAlias = false
+        textSize = baseTextSize
+        isAntiAlias = true
     }
 
     private val titlePaint = Paint().apply {
         color = Color.rgb(0, 255, 255)
-        textSize = 16f
-        isAntiAlias = false
+        textSize = baseTitleSize
+        isAntiAlias = true
         textAlign = Paint.Align.CENTER
     }
 
@@ -56,31 +69,68 @@ class UIRenderer(private val screenWidth: Int, private val screenHeight: Int) {
         style = Paint.Style.FILL
     }
 
+    /**
+     * Set screen size for high-resolution rendering.
+     * Call this with actual screen dimensions to enable crisp text.
+     */
+    fun setScreenSize(actualWidth: Int, actualHeight: Int) {
+        screenWidth = actualWidth
+        screenHeight = actualHeight
+        scaleX = actualWidth.toFloat() / gameWidth
+        scaleY = actualHeight.toFloat() / gameHeight
+        isHighRes = true
+        updatePaintSizes()
+    }
+
+    /**
+     * Reset to low-resolution mode (for game bitmap rendering).
+     */
+    fun setLowResMode() {
+        screenWidth = gameWidth
+        screenHeight = gameHeight
+        scaleX = 1f
+        scaleY = 1f
+        isHighRes = false
+        updatePaintSizes()
+    }
+
+    private fun updatePaintSizes() {
+        val scale = if (isHighRes) minOf(scaleX, scaleY) else 1f
+        textPaint.textSize = baseTextSize * scale
+        titlePaint.textSize = baseTitleSize * scale
+        borderPaint.strokeWidth = if (isHighRes) 2f else 1f
+    }
+
+    // Helper functions to scale coordinates
+    private fun sx(x: Float) = x * scaleX
+    private fun sy(y: Float) = y * scaleY
+    private fun textSize(size: Float) = size * if (isHighRes) minOf(scaleX, scaleY) else 1f
+
     fun renderTitleScreen(canvas: Canvas) {
         // Title
-        titlePaint.textSize = 24f
+        titlePaint.textSize = textSize(24f)
         titlePaint.color = Color.rgb(0, 255, 255)
-        canvas.drawText("NEON CITY", screenWidth / 2f, 50f, titlePaint)
+        canvas.drawText("NEON CITY", screenWidth / 2f, sy(50f), titlePaint)
 
         // Subtitle
-        titlePaint.textSize = 8f
+        titlePaint.textSize = textSize(8f)
         titlePaint.color = Color.rgb(255, 0, 255)
-        canvas.drawText("A Cyberpunk RPG", screenWidth / 2f, 65f, titlePaint)
+        canvas.drawText("A Cyberpunk RPG", screenWidth / 2f, sy(65f), titlePaint)
 
         // Menu options
         val centerX = screenWidth / 2f
         val menuY = screenHeight / 2f
 
         // New Game button
-        drawButton(canvas, centerX - 40, menuY - 10, 80f, 20f, "NEW GAME", true)
+        drawButton(canvas, centerX - sx(40f), menuY - sy(10f), sx(80f), sy(20f), "NEW GAME", true)
 
         // Continue button
-        drawButton(canvas, centerX - 40, menuY + 15, 80f, 20f, "CONTINUE", false)
+        drawButton(canvas, centerX - sx(40f), menuY + sy(15f), sx(80f), sy(20f), "CONTINUE", false)
 
         // Version
         textPaint.color = Color.rgb(80, 80, 100)
         textPaint.textAlign = Paint.Align.CENTER
-        canvas.drawText("v1.0", screenWidth / 2f, screenHeight - 10f, textPaint)
+        canvas.drawText("v1.0", screenWidth / 2f, screenHeight - sy(10f), textPaint)
         textPaint.textAlign = Paint.Align.LEFT
     }
 
@@ -98,7 +148,7 @@ class UIRenderer(private val screenWidth: Int, private val screenHeight: Int) {
         // Text
         textPaint.color = if (selected) Color.WHITE else Color.rgb(150, 150, 150)
         textPaint.textAlign = Paint.Align.CENTER
-        canvas.drawText(text, x + width / 2, y + height / 2 + 3, textPaint)
+        canvas.drawText(text, x + width / 2, y + height / 2 + sy(3f), textPaint)
         textPaint.textAlign = Paint.Align.LEFT
     }
 
@@ -124,38 +174,38 @@ class UIRenderer(private val screenWidth: Int, private val screenHeight: Int) {
 
         // Background panel
         backgroundPaint.color = Color.argb(180, 10, 10, 25)
-        canvas.drawRect(5f, 5f, 80f, 35f, backgroundPaint)
-        canvas.drawRect(5f, 5f, 80f, 35f, borderPaint)
+        canvas.drawRect(sx(5f), sy(5f), sx(80f), sy(35f), backgroundPaint)
+        canvas.drawRect(sx(5f), sy(5f), sx(80f), sy(35f), borderPaint)
 
         // Player name
         textPaint.color = Color.rgb(0, 255, 255)
-        canvas.drawText(player.name, 8f, 14f, textPaint)
+        canvas.drawText(player.name, sx(8f), sy(14f), textPaint)
 
         // Health bar
         val healthPercent = player.health / player.maxHealth.toFloat()
-        canvas.drawRect(8f, 17f, 75f, 21f, buttonPaint)
+        canvas.drawRect(sx(8f), sy(17f), sx(75f), sy(21f), buttonPaint)
         healthPaint.color = Color.rgb(255, 50, 50)
-        canvas.drawRect(8f, 17f, 8f + 67f * healthPercent, 21f, healthPaint)
+        canvas.drawRect(sx(8f), sy(17f), sx(8f + 67f * healthPercent), sy(21f), healthPaint)
 
         // Energy bar
         val energyPercent = player.energy / player.maxEnergy.toFloat()
-        canvas.drawRect(8f, 24f, 75f, 28f, buttonPaint)
-        canvas.drawRect(8f, 24f, 8f + 67f * energyPercent, 28f, energyPaint)
+        canvas.drawRect(sx(8f), sy(24f), sx(75f), sy(28f), buttonPaint)
+        canvas.drawRect(sx(8f), sy(24f), sx(8f + 67f * energyPercent), sy(28f), energyPaint)
 
         // Level
         textPaint.color = Color.WHITE
-        canvas.drawText("LV ${player.level}", 8f, 34f, textPaint)
+        canvas.drawText("LV ${player.level}", sx(8f), sy(34f), textPaint)
     }
 
     private fun renderTimeAndLocation(canvas: Canvas, gameState: GameState) {
         // Background panel
         backgroundPaint.color = Color.argb(180, 10, 10, 25)
-        canvas.drawRect(screenWidth - 85f, 5f, screenWidth - 5f, 30f, backgroundPaint)
-        canvas.drawRect(screenWidth - 85f, 5f, screenWidth - 5f, 30f, borderPaint)
+        canvas.drawRect(screenWidth - sx(85f), sy(5f), screenWidth - sx(5f), sy(30f), backgroundPaint)
+        canvas.drawRect(screenWidth - sx(85f), sy(5f), screenWidth - sx(5f), sy(30f), borderPaint)
 
         // Location
         textPaint.color = Color.rgb(255, 0, 255)
-        canvas.drawText(gameState.currentDistrict.name, screenWidth - 82f, 14f, textPaint)
+        canvas.drawText(gameState.currentDistrict.name, screenWidth - sx(82f), sy(14f), textPaint)
 
         // Time
         val hours = gameState.gameTime.toInt()
@@ -164,35 +214,37 @@ class UIRenderer(private val screenWidth: Int, private val screenHeight: Int) {
         val period = if (hours < 12) "AM" else "PM"
 
         textPaint.color = if (gameState.currentDistrict.isNight) Color.rgb(100, 100, 200) else Color.rgb(255, 200, 100)
-        canvas.drawText("$timeStr $period", screenWidth - 82f, 24f, textPaint)
+        canvas.drawText("$timeStr $period", screenWidth - sx(82f), sy(24f), textPaint)
     }
 
     private fun renderJoystickIndicator(canvas: Canvas) {
         // Joystick base circle
-        val centerX = 50f
-        val centerY = screenHeight - 50f
+        val centerX = sx(50f)
+        val centerY = screenHeight - sy(50f)
+        val baseRadius = sx(35f)
+        val innerRadius = sx(12f)
 
         accentPaint.color = Color.argb(60, 0, 200, 200)
-        canvas.drawCircle(centerX, centerY, 35f, accentPaint)
+        canvas.drawCircle(centerX, centerY, baseRadius, accentPaint)
 
         borderPaint.color = Color.argb(100, 0, 255, 255)
-        canvas.drawCircle(centerX, centerY, 35f, borderPaint)
+        canvas.drawCircle(centerX, centerY, baseRadius, borderPaint)
 
         // Inner joystick
         accentPaint.color = Color.argb(100, 0, 255, 255)
-        canvas.drawCircle(centerX, centerY, 12f, accentPaint)
+        canvas.drawCircle(centerX, centerY, innerRadius, accentPaint)
     }
 
     private fun renderActionButtons(canvas: Canvas, gameState: GameState) {
         // Inventory button
-        drawActionButton(canvas, screenWidth - 60f, screenHeight - 30f, 25f, "INV")
+        drawActionButton(canvas, screenWidth - sx(60f), screenHeight - sy(30f), sx(25f), "INV")
 
         // Quest button
-        drawActionButton(canvas, screenWidth - 30f, screenHeight - 30f, 25f, "QST")
+        drawActionButton(canvas, screenWidth - sx(30f), screenHeight - sy(30f), sx(25f), "QST")
 
         // Interact button (larger)
         val nearNPC = gameState.npcs.any { it.isPlayerNear }
-        drawActionButton(canvas, screenWidth - 45f, screenHeight - 60f, 30f, "ACT", nearNPC)
+        drawActionButton(canvas, screenWidth - sx(45f), screenHeight - sy(60f), sx(30f), "ACT", nearNPC)
     }
 
     private fun drawActionButton(canvas: Canvas, x: Float, y: Float, size: Float, label: String, highlight: Boolean = false) {
@@ -206,68 +258,70 @@ class UIRenderer(private val screenWidth: Int, private val screenHeight: Int) {
 
         textPaint.color = if (highlight) Color.WHITE else Color.rgb(150, 150, 150)
         textPaint.textAlign = Paint.Align.CENTER
-        textPaint.textSize = 6f
-        canvas.drawText(label, x + size / 2, y + size / 2 + 2, textPaint)
+        textPaint.textSize = textSize(6f)
+        canvas.drawText(label, x + size / 2, y + size / 2 + sy(2f), textPaint)
         textPaint.textAlign = Paint.Align.LEFT
-        textPaint.textSize = 8f
+        textPaint.textSize = textSize(baseTextSize)
     }
 
     fun renderDialogue(canvas: Canvas, gameState: GameState) {
         val dialogue = gameState.activeDialogue ?: return
 
         // Dialogue box background
-        val boxTop = screenHeight - 60f
+        val boxTop = screenHeight - sy(60f)
         backgroundPaint.color = Color.argb(230, 10, 10, 25)
-        canvas.drawRect(10f, boxTop, screenWidth - 10f, screenHeight - 10f, backgroundPaint)
+        canvas.drawRect(sx(10f), boxTop, screenWidth - sx(10f), screenHeight - sy(10f), backgroundPaint)
 
         borderPaint.color = Color.rgb(0, 200, 200)
-        canvas.drawRect(10f, boxTop, screenWidth - 10f, screenHeight - 10f, borderPaint)
+        canvas.drawRect(sx(10f), boxTop, screenWidth - sx(10f), screenHeight - sy(10f), borderPaint)
 
         // NPC name
         accentPaint.color = Color.rgb(0, 200, 200)
-        canvas.drawRect(15f, boxTop - 10f, 15f + dialogue.npc.name.length * 6f + 10f, boxTop, accentPaint)
+        val nameWidth = textPaint.measureText(dialogue.npc.name) + sx(10f)
+        canvas.drawRect(sx(15f), boxTop - sy(10f), sx(15f) + nameWidth, boxTop, accentPaint)
         textPaint.color = Color.BLACK
-        canvas.drawText(dialogue.npc.name, 20f, boxTop - 2f, textPaint)
+        canvas.drawText(dialogue.npc.name, sx(20f), boxTop - sy(2f), textPaint)
 
         // Dialogue text
         textPaint.color = Color.WHITE
         val text = dialogue.getCurrentText()
         val words = text.split(" ")
         var currentLine = ""
-        var lineY = boxTop + 12f
-        val maxWidth = screenWidth - 40
+        var lineY = boxTop + sy(12f)
+        val maxWidth = screenWidth - sx(40f)
+        val lineHeight = sy(10f)
 
         for (word in words) {
             val testLine = if (currentLine.isEmpty()) word else "$currentLine $word"
             if (textPaint.measureText(testLine) < maxWidth) {
                 currentLine = testLine
             } else {
-                canvas.drawText(currentLine, 15f, lineY, textPaint)
-                lineY += 10f
+                canvas.drawText(currentLine, sx(15f), lineY, textPaint)
+                lineY += lineHeight
                 currentLine = word
             }
         }
         if (currentLine.isNotEmpty()) {
-            canvas.drawText(currentLine, 15f, lineY, textPaint)
+            canvas.drawText(currentLine, sx(15f), lineY, textPaint)
         }
 
         // Response options
         val responses = dialogue.getResponses()
-        val responseStartY = boxTop + 30f
+        val responseStartY = boxTop + sy(30f)
 
         textPaint.color = Color.rgb(0, 255, 255)
         for ((index, response) in responses.withIndex()) {
-            val responseY = responseStartY + index * 12f
-            canvas.drawText("> $response", 20f, responseY, textPaint)
+            val responseY = responseStartY + index * sy(12f)
+            canvas.drawText("> $response", sx(20f), responseY, textPaint)
         }
     }
 
     fun renderInventory(canvas: Canvas, gameState: GameState) {
         // Inventory panel
-        val panelLeft = 30f
-        val panelTop = 20f
-        val panelWidth = screenWidth - 60f
-        val panelHeight = screenHeight - 40f
+        val panelLeft = sx(30f)
+        val panelTop = sy(20f)
+        val panelWidth = screenWidth - sx(60f)
+        val panelHeight = screenHeight - sy(40f)
 
         // Background
         backgroundPaint.color = Color.argb(240, 10, 10, 25)
@@ -275,21 +329,22 @@ class UIRenderer(private val screenWidth: Int, private val screenHeight: Int) {
         canvas.drawRect(panelLeft, panelTop, panelLeft + panelWidth, panelTop + panelHeight, borderPaint)
 
         // Title
-        titlePaint.textSize = 10f
+        titlePaint.textSize = textSize(10f)
         titlePaint.color = Color.rgb(0, 255, 255)
-        canvas.drawText("INVENTORY", screenWidth / 2f, panelTop + 15f, titlePaint)
+        canvas.drawText("INVENTORY", screenWidth / 2f, panelTop + sy(15f), titlePaint)
 
         // Inventory grid
-        val gridStartX = panelLeft + 10f
-        val gridStartY = panelTop + 25f
-        val cellSize = 20f
+        val gridStartX = panelLeft + sx(10f)
+        val gridStartY = panelTop + sy(25f)
+        val cellSize = sx(20f)
+        val cellGap = sx(2f)
         val cols = 8
         val rows = 4
 
         for (row in 0 until rows) {
             for (col in 0 until cols) {
-                val cellX = gridStartX + col * (cellSize + 2)
-                val cellY = gridStartY + row * (cellSize + 2)
+                val cellX = gridStartX + col * (cellSize + cellGap)
+                val cellY = gridStartY + row * (cellSize + cellGap)
 
                 buttonPaint.color = Color.rgb(30, 30, 45)
                 canvas.drawRect(cellX, cellY, cellX + cellSize, cellY + cellSize, buttonPaint)
@@ -301,7 +356,7 @@ class UIRenderer(private val screenWidth: Int, private val screenHeight: Int) {
                     val item = gameState.inventory.items[itemIndex]
                     textPaint.textAlign = Paint.Align.CENTER
                     textPaint.color = item.color
-                    canvas.drawText(item.symbol, cellX + cellSize / 2, cellY + cellSize / 2 + 3, textPaint)
+                    canvas.drawText(item.symbol, cellX + cellSize / 2, cellY + cellSize / 2 + sy(3f), textPaint)
                     textPaint.textAlign = Paint.Align.LEFT
                 }
             }
@@ -309,19 +364,21 @@ class UIRenderer(private val screenWidth: Int, private val screenHeight: Int) {
 
         // Credits display
         textPaint.color = Color.rgb(255, 200, 0)
-        canvas.drawText("Credits: ${gameState.inventory.credits}", panelLeft + 10f, panelTop + panelHeight - 10f, textPaint)
+        canvas.drawText("Credits: ${gameState.inventory.credits}", panelLeft + sx(10f), panelTop + panelHeight - sy(10f), textPaint)
 
         // Close hint
         textPaint.color = Color.rgb(100, 100, 120)
-        canvas.drawText("Tap outside to close", screenWidth / 2f - 35f, panelTop + panelHeight - 10f, textPaint)
+        textPaint.textAlign = Paint.Align.CENTER
+        canvas.drawText("Tap outside to close", screenWidth / 2f, panelTop + panelHeight - sy(10f), textPaint)
+        textPaint.textAlign = Paint.Align.LEFT
     }
 
     fun renderQuestLog(canvas: Canvas, gameState: GameState) {
         // Quest log panel
-        val panelLeft = 30f
-        val panelTop = 20f
-        val panelWidth = screenWidth - 60f
-        val panelHeight = screenHeight - 40f
+        val panelLeft = sx(30f)
+        val panelTop = sy(20f)
+        val panelWidth = screenWidth - sx(60f)
+        val panelHeight = screenHeight - sy(40f)
 
         // Background
         backgroundPaint.color = Color.argb(240, 10, 10, 25)
@@ -329,38 +386,41 @@ class UIRenderer(private val screenWidth: Int, private val screenHeight: Int) {
         canvas.drawRect(panelLeft, panelTop, panelLeft + panelWidth, panelTop + panelHeight, borderPaint)
 
         // Title
-        titlePaint.textSize = 10f
+        titlePaint.textSize = textSize(10f)
         titlePaint.color = Color.rgb(255, 0, 255)
-        canvas.drawText("QUEST LOG", screenWidth / 2f, panelTop + 15f, titlePaint)
+        canvas.drawText("QUEST LOG", screenWidth / 2f, panelTop + sy(15f), titlePaint)
 
         // Quest list
-        var questY = panelTop + 30f
+        var questY = panelTop + sy(30f)
         val activeQuests = gameState.questManager.getActiveQuests()
+        val lineHeight = sy(10f)
 
         if (activeQuests.isEmpty()) {
             textPaint.color = Color.rgb(100, 100, 120)
-            canvas.drawText("No active quests", panelLeft + 15f, questY, textPaint)
+            canvas.drawText("No active quests", panelLeft + sx(15f), questY, textPaint)
         } else {
             for (quest in activeQuests) {
                 // Quest title
                 textPaint.color = Color.rgb(255, 200, 0)
-                canvas.drawText(quest.title, panelLeft + 15f, questY, textPaint)
-                questY += 10f
+                canvas.drawText(quest.title, panelLeft + sx(15f), questY, textPaint)
+                questY += lineHeight
 
                 // Quest objectives
                 for (objective in quest.objectives) {
                     textPaint.color = if (objective.completed) Color.rgb(0, 200, 0) else Color.rgb(150, 150, 150)
                     val marker = if (objective.completed) "[X]" else "[ ]"
-                    canvas.drawText("$marker ${objective.description}", panelLeft + 20f, questY, textPaint)
-                    questY += 10f
+                    canvas.drawText("$marker ${objective.description}", panelLeft + sx(20f), questY, textPaint)
+                    questY += lineHeight
                 }
-                questY += 5f
+                questY += sy(5f)
             }
         }
 
         // Close hint
         textPaint.color = Color.rgb(100, 100, 120)
-        canvas.drawText("Tap outside to close", screenWidth / 2f - 35f, panelTop + panelHeight - 10f, textPaint)
+        textPaint.textAlign = Paint.Align.CENTER
+        canvas.drawText("Tap outside to close", screenWidth / 2f, panelTop + panelHeight - sy(10f), textPaint)
+        textPaint.textAlign = Paint.Align.LEFT
     }
 
     fun renderPauseMenu(canvas: Canvas) {
@@ -369,13 +429,13 @@ class UIRenderer(private val screenWidth: Int, private val screenHeight: Int) {
         canvas.drawRect(0f, 0f, screenWidth.toFloat(), screenHeight.toFloat(), backgroundPaint)
 
         // Pause text
-        titlePaint.textSize = 16f
+        titlePaint.textSize = textSize(16f)
         titlePaint.color = Color.rgb(0, 255, 255)
         canvas.drawText("PAUSED", screenWidth / 2f, screenHeight / 2f, titlePaint)
 
         textPaint.color = Color.rgb(150, 150, 150)
         textPaint.textAlign = Paint.Align.CENTER
-        canvas.drawText("Tap to resume", screenWidth / 2f, screenHeight / 2f + 20f, textPaint)
+        canvas.drawText("Tap to resume", screenWidth / 2f, screenHeight / 2f + sy(20f), textPaint)
         textPaint.textAlign = Paint.Align.LEFT
     }
 }

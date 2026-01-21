@@ -10,8 +10,9 @@ import com.neoncity.rpg.engine.GameView
 import com.neoncity.rpg.game.GameState
 
 /**
- * Main game renderer - renders everything to a low-res bitmap
+ * Main game renderer - renders game graphics to a low-res bitmap
  * that gets scaled up for the pixel art effect.
+ * UI is rendered separately at full resolution for crisp text.
  */
 class GameRenderer(
     context: Context,
@@ -22,47 +23,81 @@ class GameRenderer(
     private val canvas: Canvas = Canvas(bitmap)
 
     private val tileRenderer: IsometricTileRenderer = IsometricTileRenderer()
-    private val entityRenderer: EntityRenderer = EntityRenderer()
-    private val uiRenderer: UIRenderer = UIRenderer(width, height)
+    val entityRenderer: EntityRenderer = EntityRenderer()
+    val uiRenderer: UIRenderer = UIRenderer(width, height)
 
     private val backgroundPaint = Paint().apply {
         color = Color.rgb(13, 13, 26)  // Dark blue-black
     }
 
+    /**
+     * Render game graphics at low resolution (pixel art).
+     * UI is NOT rendered here - it should be rendered separately at high resolution.
+     */
     fun render(gameState: GameState): Bitmap {
         // Clear canvas
         canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), backgroundPaint)
 
         when (gameState.currentScreen) {
-            GameState.Screen.TITLE -> renderTitleScreen(gameState)
-            GameState.Screen.PLAYING -> renderGameplay(gameState)
-            GameState.Screen.DIALOGUE -> {
-                renderGameplay(gameState)
-                uiRenderer.renderDialogue(canvas, gameState)
-            }
-            GameState.Screen.INVENTORY -> {
-                renderGameplay(gameState)
-                uiRenderer.renderInventory(canvas, gameState)
-            }
-            GameState.Screen.QUEST_LOG -> {
-                renderGameplay(gameState)
-                uiRenderer.renderQuestLog(canvas, gameState)
-            }
-            GameState.Screen.PAUSE -> {
-                renderGameplay(gameState)
-                uiRenderer.renderPauseMenu(canvas)
-            }
+            GameState.Screen.TITLE -> renderTitleBackground()
+            GameState.Screen.PLAYING,
+            GameState.Screen.DIALOGUE,
+            GameState.Screen.INVENTORY,
+            GameState.Screen.QUEST_LOG,
+            GameState.Screen.PAUSE -> renderGameplay(gameState)
         }
 
         return bitmap
     }
 
-    private fun renderTitleScreen(gameState: GameState) {
-        // Draw title background with city silhouette
-        drawCitySilhouette()
+    /**
+     * Render UI elements to the given canvas at high resolution.
+     * Call this after rendering the scaled-up game bitmap.
+     */
+    fun renderUI(canvas: Canvas, gameState: GameState) {
+        // Render entity labels (NPC names, quest markers) at high resolution
+        if (gameState.currentScreen != GameState.Screen.TITLE) {
+            renderEntityLabels(canvas, gameState)
+        }
 
-        // Draw title
-        uiRenderer.renderTitleScreen(canvas)
+        when (gameState.currentScreen) {
+            GameState.Screen.TITLE -> uiRenderer.renderTitleScreen(canvas)
+            GameState.Screen.PLAYING -> uiRenderer.renderHUD(canvas, gameState)
+            GameState.Screen.DIALOGUE -> {
+                uiRenderer.renderHUD(canvas, gameState)
+                uiRenderer.renderDialogue(canvas, gameState)
+            }
+            GameState.Screen.INVENTORY -> {
+                uiRenderer.renderHUD(canvas, gameState)
+                uiRenderer.renderInventory(canvas, gameState)
+            }
+            GameState.Screen.QUEST_LOG -> {
+                uiRenderer.renderHUD(canvas, gameState)
+                uiRenderer.renderQuestLog(canvas, gameState)
+            }
+            GameState.Screen.PAUSE -> {
+                uiRenderer.renderHUD(canvas, gameState)
+                uiRenderer.renderPauseMenu(canvas)
+            }
+        }
+    }
+
+    /**
+     * Render entity labels at high resolution.
+     */
+    private fun renderEntityLabels(canvas: Canvas, gameState: GameState) {
+        val cameraX = gameState.cameraX
+        val cameraY = gameState.cameraY
+
+        // Render NPC labels sorted by Y for proper depth
+        gameState.npcs.sortedBy { it.y }.forEach { npc ->
+            entityRenderer.renderLabels(canvas, npc, cameraX, cameraY, width, height)
+        }
+    }
+
+    private fun renderTitleBackground() {
+        // Draw title background with city silhouette (pixel art)
+        drawCitySilhouette()
     }
 
     private fun drawCitySilhouette() {
@@ -112,6 +147,7 @@ class GameRenderer(
         entities.addAll(gameState.npcs)
 
         // Sort by Y position for proper depth ordering in isometric view
+        // Skip labels - they're rendered at high resolution in renderUI()
         entities.sortedBy {
             when (it) {
                 is com.neoncity.rpg.entity.Player -> it.y
@@ -119,10 +155,7 @@ class GameRenderer(
                 else -> 0f
             }
         }.forEach { entity ->
-            entityRenderer.render(canvas, entity, cameraX, cameraY, width, height)
+            entityRenderer.render(canvas, entity, cameraX, cameraY, width, height, skipLabels = true)
         }
-
-        // Render HUD
-        uiRenderer.renderHUD(canvas, gameState)
     }
 }

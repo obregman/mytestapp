@@ -39,8 +39,10 @@ class GameView(context: Context) : SurfaceView(context), SurfaceHolder.Callback,
     private val fpsPaint = Paint().apply {
         color = Color.WHITE
         textSize = 24f
-        isAntiAlias = false
+        isAntiAlias = true
     }
+
+    private var uiInitialized = false
 
     private var lastFrameTime = System.currentTimeMillis()
     private var fps = 0
@@ -57,6 +59,11 @@ class GameView(context: Context) : SurfaceView(context), SurfaceHolder.Callback,
         scaleY = GAME_HEIGHT.toFloat() / height
         inputHandler.setScale(scaleX, scaleY)
 
+        // Set up renderers for high-resolution text
+        renderer.uiRenderer.setScreenSize(width, height)
+        renderer.entityRenderer.setScreenSize(width, height, GAME_WIDTH, GAME_HEIGHT)
+        uiInitialized = true
+
         resume()
     }
 
@@ -64,6 +71,11 @@ class GameView(context: Context) : SurfaceView(context), SurfaceHolder.Callback,
         scaleX = GAME_WIDTH.toFloat() / width
         scaleY = GAME_HEIGHT.toFloat() / height
         inputHandler.setScale(scaleX, scaleY)
+
+        // Update renderers for high-resolution text
+        renderer.uiRenderer.setScreenSize(width, height)
+        renderer.entityRenderer.setScreenSize(width, height, GAME_WIDTH, GAME_HEIGHT)
+        uiInitialized = true
     }
 
     override fun surfaceDestroyed(holder: SurfaceHolder) {
@@ -128,7 +140,7 @@ class GameView(context: Context) : SurfaceView(context), SurfaceHolder.Callback,
     override fun draw(canvas: Canvas) {
         super.draw(canvas)
 
-        // Render game at low resolution then scale up
+        // Render game graphics at low resolution then scale up (pixel art)
         val gameBitmap = renderer.render(gameState)
 
         // Draw scaled up bitmap for pixel art effect
@@ -138,6 +150,11 @@ class GameView(context: Context) : SurfaceView(context), SurfaceHolder.Callback,
             android.graphics.Rect(0, 0, width, height),
             null
         )
+
+        // Render UI at full screen resolution for crisp text
+        if (uiInitialized) {
+            renderer.renderUI(canvas, gameState)
+        }
 
         // Draw FPS counter (at screen resolution)
         if (gameState.showDebug) {
