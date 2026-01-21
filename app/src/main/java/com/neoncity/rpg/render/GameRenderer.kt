@@ -89,8 +89,8 @@ class GameRenderer(
         val cameraX = gameState.cameraX
         val cameraY = gameState.cameraY
 
-        // Render NPC labels sorted by Y for proper depth
-        gameState.npcs.sortedBy { it.y }.forEach { npc ->
+        // Render NPC labels sorted by isometric depth (x + y) for proper ordering
+        gameState.npcs.sortedBy { it.x + it.y }.forEach { npc ->
             entityRenderer.renderLabels(canvas, npc, cameraX, cameraY, width, height)
         }
     }
@@ -138,24 +138,57 @@ class GameRenderer(
         val cameraX = gameState.cameraX
         val cameraY = gameState.cameraY
 
-        // Render tiles
-        tileRenderer.render(canvas, gameState.currentDistrict, cameraX, cameraY, width, height)
-
-        // Render entities (sorted by Y for depth)
+        // Collect and sort entities by isometric depth (x + y)
+        // Using floor() to determine which tile row they belong to
         val entities = mutableListOf<Any>()
         entities.add(gameState.player)
         entities.addAll(gameState.npcs)
 
-        // Sort by Y position for proper depth ordering in isometric view
-        // Skip labels - they're rendered at high resolution in renderUI()
-        entities.sortedBy {
-            when (it) {
-                is com.neoncity.rpg.entity.Player -> it.y
-                is com.neoncity.rpg.entity.NPC -> it.y
-                else -> 0f
+        // Group entities by their tile Y row for interleaved rendering
+        val entitiesByRow = entities.groupBy { entity ->
+            when (entity) {
+                is com.neoncity.rpg.entity.Player -> entity.y.toInt()
+                is com.neoncity.rpg.entity.NPC -> entity.y.toInt()
+                else -> 0
             }
-        }.forEach { entity ->
-            entityRenderer.render(canvas, entity, cameraX, cameraY, width, height, skipLabels = true)
+        }
+
+        // Track which rows have been rendered
+        val renderedRows = mutableSetOf<Int>()
+
+        // Render tiles with interleaved entity rendering for proper depth
+        tileRenderer.render(canvas, gameState.currentDistrict, cameraX, cameraY, width, height) { row ->
+            // Render all entities at this Y row (and any rows between last rendered)
+            // This handles entities that might be at fractional positions
+            val startRow = (renderedRows.maxOrNull() ?: (row - 1)) + 1
+            for (r in startRow..row) {
+                entitiesByRow[r]?.let { rowEntities ->
+                    // Sort entities within the same row by x + y for proper isometric depth
+                    rowEntities.sortedBy { entity ->
+                        when (entity) {
+                            is com.neoncity.rpg.entity.Player -> entity.x + entity.y
+                            is com.neoncity.rpg.entity.NPC -> entity.x + entity.y
+                            else -> 0f
+                        }
+                    }.forEach { entity ->
+                        entityRenderer.render(canvas, entity, cameraX, cameraY, width, height, skipLabels = true)
+                    }
+                }
+                renderedRows.add(r)
+            }
+        }
+
+        // Render any remaining entities that weren't covered by tile rows
+        entitiesByRow.keys.filter { it !in renderedRows }.sorted().forEach { row ->
+            entitiesByRow[row]?.sortedBy { entity ->
+                when (entity) {
+                    is com.neoncity.rpg.entity.Player -> entity.x + entity.y
+                    is com.neoncity.rpg.entity.NPC -> entity.x + entity.y
+                    else -> 0f
+                }
+            }?.forEach { entity ->
+                entityRenderer.render(canvas, entity, cameraX, cameraY, width, height, skipLabels = true)
+            }
         }
     }
 }
