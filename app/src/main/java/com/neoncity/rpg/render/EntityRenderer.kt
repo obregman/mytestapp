@@ -8,6 +8,8 @@ import com.neoncity.rpg.entity.Player
 
 /**
  * Renders game entities (player, NPCs) in isometric view.
+ * Entity sprites are rendered at low resolution for pixel art effect.
+ * Entity labels (names, markers) can be rendered separately at high resolution.
  */
 class EntityRenderer {
 
@@ -15,6 +17,12 @@ class EntityRenderer {
         const val TILE_WIDTH = 16
         const val TILE_HEIGHT = 8
     }
+
+    // Scale factors for high-res label rendering
+    private var scaleX = 1f
+    private var scaleY = 1f
+    private var isHighRes = false
+    private val baseTextSize = 6f
 
     private val bodyPaint = Paint().apply {
         isAntiAlias = false
@@ -40,16 +48,54 @@ class EntityRenderer {
     }
 
     private val textPaint = Paint().apply {
-        isAntiAlias = false
+        isAntiAlias = true
         color = Color.WHITE
-        textSize = 6f
+        textSize = baseTextSize
         textAlign = Paint.Align.CENTER
     }
 
-    fun render(canvas: Canvas, entity: Any, cameraX: Float, cameraY: Float, screenWidth: Int, screenHeight: Int) {
+    /**
+     * Set screen size for high-resolution label rendering.
+     */
+    fun setScreenSize(actualWidth: Int, actualHeight: Int, gameWidth: Int, gameHeight: Int) {
+        scaleX = actualWidth.toFloat() / gameWidth
+        scaleY = actualHeight.toFloat() / gameHeight
+        isHighRes = true
+        textPaint.textSize = baseTextSize * minOf(scaleX, scaleY)
+    }
+
+    /**
+     * Reset to low-resolution mode.
+     */
+    fun setLowResMode() {
+        scaleX = 1f
+        scaleY = 1f
+        isHighRes = false
+        textPaint.textSize = baseTextSize
+    }
+
+    // Helper to convert low-res coordinates to high-res screen coordinates
+    private fun toScreenX(x: Float) = if (isHighRes) x * scaleX else x
+    private fun toScreenY(y: Float) = if (isHighRes) y * scaleY else y
+
+    /**
+     * Render entity sprites (low-res pixel art mode).
+     * Labels are skipped here if they will be rendered at high-res separately.
+     */
+    fun render(canvas: Canvas, entity: Any, cameraX: Float, cameraY: Float, screenWidth: Int, screenHeight: Int, skipLabels: Boolean = false) {
         when (entity) {
             is Player -> renderPlayer(canvas, entity, cameraX, cameraY, screenWidth, screenHeight)
-            is NPC -> renderNPC(canvas, entity, cameraX, cameraY, screenWidth, screenHeight)
+            is NPC -> renderNPC(canvas, entity, cameraX, cameraY, screenWidth, screenHeight, skipLabels)
+        }
+    }
+
+    /**
+     * Render entity labels at high resolution (names, quest markers).
+     * Call this on the screen canvas after rendering scaled-up game bitmap.
+     */
+    fun renderLabels(canvas: Canvas, entity: Any, cameraX: Float, cameraY: Float, gameWidth: Int, gameHeight: Int) {
+        when (entity) {
+            is NPC -> renderNPCLabels(canvas, entity, cameraX, cameraY, gameWidth, gameHeight)
         }
     }
 
@@ -126,7 +172,7 @@ class EntityRenderer {
         canvas.drawPoint(screenX + 1, screenY - 14 + bobY, highlightPaint)
     }
 
-    private fun renderNPC(canvas: Canvas, npc: NPC, cameraX: Float, cameraY: Float, screenWidth: Int, screenHeight: Int) {
+    private fun renderNPC(canvas: Canvas, npc: NPC, cameraX: Float, cameraY: Float, screenWidth: Int, screenHeight: Int, skipLabels: Boolean = false) {
         val (screenX, screenY) = worldToScreen(npc.x, npc.y, cameraX, cameraY, screenWidth, screenHeight)
 
         // Draw shadow
@@ -157,30 +203,53 @@ class EntityRenderer {
         canvas.drawRect(screenX - 2, screenY - 4 + bobY, screenX, screenY + bobY, bodyPaint)
         canvas.drawRect(screenX, screenY - 4 + bobY, screenX + 2, screenY + bobY, bodyPaint)
 
-        // Interaction indicator
+        // Interaction indicator (visual circle - keep in low res for pixel art)
         if (npc.isPlayerNear) {
             val pulseAlpha = ((System.currentTimeMillis() / 100) % 10).toInt() * 25
             highlightPaint.color = Color.argb(150 + pulseAlpha / 3, 0, 255, 255)
             canvas.drawCircle(screenX, screenY - 22, 3f, highlightPaint)
-
-            // Exclamation mark if has quest
-            if (npc.hasQuest) {
-                textPaint.color = Color.rgb(255, 200, 0)
-                canvas.drawText("!", screenX, screenY - 20, textPaint)
-            }
         }
 
-        // Quest marker above head
-        if (npc.hasQuest && !npc.isPlayerNear) {
-            val bounce = ((System.currentTimeMillis() / 300) % 3).toInt()
+        // Labels (name, quest markers) are rendered in high-res pass if skipLabels is true
+        if (!skipLabels) {
+            // Exclamation mark if has quest
+            if (npc.hasQuest) {
+                val bounce = if (!npc.isPlayerNear) ((System.currentTimeMillis() / 300) % 3).toInt() else 0
+                textPaint.color = Color.rgb(255, 200, 0)
+                val markerY = if (npc.isPlayerNear) screenY - 20 else screenY - 19 - bounce
+                canvas.drawText("!", screenX, markerY, textPaint)
+            }
+
+            // Name tag when nearby
+            if (npc.isPlayerNear) {
+                textPaint.color = Color.WHITE
+                canvas.drawText(npc.name, screenX, screenY - 25, textPaint)
+            }
+        }
+    }
+
+    /**
+     * Render NPC labels at high resolution.
+     */
+    private fun renderNPCLabels(canvas: Canvas, npc: NPC, cameraX: Float, cameraY: Float, gameWidth: Int, gameHeight: Int) {
+        val (gameX, gameY) = worldToScreen(npc.x, npc.y, cameraX, cameraY, gameWidth, gameHeight)
+
+        // Convert to high-res screen coordinates
+        val screenX = toScreenX(gameX)
+        val screenY = toScreenY(gameY)
+
+        // Quest marker
+        if (npc.hasQuest) {
+            val bounce = if (!npc.isPlayerNear) toScreenY(((System.currentTimeMillis() / 300) % 3).toFloat()) else 0f
             textPaint.color = Color.rgb(255, 200, 0)
-            canvas.drawText("!", screenX, screenY - 19 - bounce, textPaint)
+            val markerY = if (npc.isPlayerNear) screenY - toScreenY(20f) else screenY - toScreenY(19f) - bounce
+            canvas.drawText("!", screenX, markerY, textPaint)
         }
 
         // Name tag when nearby
         if (npc.isPlayerNear) {
             textPaint.color = Color.WHITE
-            canvas.drawText(npc.name, screenX, screenY - 25, textPaint)
+            canvas.drawText(npc.name, screenX, screenY - toScreenY(25f), textPaint)
         }
     }
 }

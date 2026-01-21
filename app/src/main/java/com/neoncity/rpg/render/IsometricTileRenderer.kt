@@ -11,6 +11,7 @@ import com.neoncity.rpg.world.TileType
 /**
  * Renders the isometric tile map.
  * Uses a 2:1 isometric projection (16x8 pixel tiles).
+ * Supports interleaved entity rendering for proper depth/occlusion.
  */
 class IsometricTileRenderer {
 
@@ -37,7 +38,19 @@ class IsometricTileRenderer {
         strokeWidth = 1f
     }
 
-    fun render(canvas: Canvas, district: District, cameraX: Float, cameraY: Float, screenWidth: Int, screenHeight: Int) {
+    /**
+     * Render tiles with interleaved entity rendering for proper depth.
+     * @param entityRenderer Called to render entities at each isometric depth row
+     */
+    fun render(
+        canvas: Canvas,
+        district: District,
+        cameraX: Float,
+        cameraY: Float,
+        screenWidth: Int,
+        screenHeight: Int,
+        entityRenderer: ((row: Int) -> Unit)? = null
+    ) {
         val centerX = screenWidth / 2f
         val centerY = screenHeight / 3f  // Offset for better view
 
@@ -48,15 +61,39 @@ class IsometricTileRenderer {
         val endY = (cameraY + 20).toInt().coerceAtMost(district.height)
 
         // Render tiles in isometric order (back to front)
+        // Interleave entity rendering for proper depth occlusion
         for (y in startY until endY) {
+            // First render ground/flat tiles for this row
             for (x in startX until endX) {
                 val tile = district.getTile(x, y)
-                if (tile != null) {
+                if (tile != null && !isElevatedTile(tile)) {
+                    val screenPos = worldToScreen(x.toFloat() - cameraX, y.toFloat() - cameraY, centerX, centerY)
+                    renderTile(canvas, tile, screenPos.first, screenPos.second, district.isNight)
+                }
+            }
+
+            // Render entities at this Y row (they stand on the ground)
+            entityRenderer?.invoke(y)
+
+            // Then render elevated tiles (buildings/walls) which may occlude entities
+            for (x in startX until endX) {
+                val tile = district.getTile(x, y)
+                if (tile != null && isElevatedTile(tile)) {
                     val screenPos = worldToScreen(x.toFloat() - cameraX, y.toFloat() - cameraY, centerX, centerY)
                     renderTile(canvas, tile, screenPos.first, screenPos.second, district.isNight)
                 }
             }
         }
+
+        // Render any entities beyond the visible tile range
+        entityRenderer?.invoke(endY)
+    }
+
+    /**
+     * Check if a tile is elevated (has 3D faces that can occlude entities)
+     */
+    private fun isElevatedTile(tile: Tile): Boolean {
+        return tile.type == TileType.BUILDING || tile.type == TileType.WALL
     }
 
     private fun worldToScreen(worldX: Float, worldY: Float, centerX: Float, centerY: Float): Pair<Float, Float> {
