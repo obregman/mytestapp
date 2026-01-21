@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.NeonCityRPG" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/neon_cyan</item>
+        <item name="colorPrimaryDark">@color/dark_bg</item>
+        <item name="colorAccent">@color/neon_magenta</item>
+    </style>
+
+    <style name="Theme.NeonCityRPG.Fullscreen" parent="Theme.NeonCityRPG">
+        <item name="android:windowFullscreen">true</item>
+        <item name="android:windowContentOverlay">@null</item>
+    </style>
+</resources>
