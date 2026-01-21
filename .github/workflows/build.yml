@@ -10,6 +10,11 @@ on:
       - main
   workflow_dispatch:
 
+# Prevent duplicate runs - cancel in-progress runs when new commit is pushed
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     name: Build Debug APK
