@@ -1,0 +1,32 @@
+# Gradle files
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+
+# IDE
+.idea/
+*.iml
+*.ipr
+*.iws
+.DS_Store
+
+# Local configuration
+local.properties
+*.log
+
+# Android
+*.apk
+*.ap_
+*.aab
+*.dex
+
+# Kotlin
+*.kotlin_module
+
+# Signing
+*.jks
+*.keystore
+
+# Generated files
+app/release/
+app/debug/
